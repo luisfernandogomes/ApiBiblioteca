@@ -133,9 +133,10 @@ def cadastrar_emprestimo():
 
         isbn = int(request.form.get('isbn'))
         id_usuario = int(request.form.get('id_usuario'))
-        
+
 
         isbn_livro = select(Livros)
+        db_livros = db_session.execute(isbn_livro).scalars()
         isbn_livro = db_session.execute(isbn_livro.filter_by(ISBN=isbn)).first()
         if not isbn_livro:
             return jsonify({'Livro não encontrado': isbn_livro})
@@ -162,8 +163,8 @@ def cadastrar_emprestimo():
 Atendimento à biblioteca: A API deve fornecer funcionalidades para:
 a. Cadastro de novos livros; ✅
 b. Cadastro de novos usuários;✅
-c. Realização de empréstimos;❌
-d. Consulta de livros disponíveis e emprestados;❌
+c. Realização de empréstimos;✅
+d. Consulta de livros disponíveis e emprestados;✅
 e. Consulta de histórico de empréstimos por usuário;❌
 f. Atualização de informações de livros e usuários;❌
 g. Exclusão de livros e usuários (com regras de negócio adequadas).❌
