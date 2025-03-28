@@ -16,7 +16,6 @@ class Livros(Base):
     titulo = Column(String, nullable=False)
     autor = Column(String, nullable=False)
     resumo = Column(String, nullable=False)
-
     status = Column(Boolean, nullable=True)
 
     def __repr__(self):

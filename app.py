@@ -127,6 +127,7 @@ def cadastrar_usuario():
 @app.route('/cadastrar_emprestimo', methods=['POST'])
 def cadastrar_emprestimo():
     if request.method == 'POST':
+
         data_emprestimo = date.today()
         data_de_devolucao = data_emprestimo + relativedelta(weeks=5)
 
@@ -137,11 +138,21 @@ def cadastrar_emprestimo():
 
         isbn_livro = select(Livros)
         db_livros = db_session.execute(isbn_livro).scalars()
-        isbn_livro = db_session.execute(isbn_livro.filter_by(ISBN=isbn)).first()
+        isbn_livro = db_session.execute(isbn_livro.filter_by(ISBN=isbn)).scalar()
+
+        joinLivros_usuarios = (select(Emprestimos, Usuarios)
+                               .join(Usuarios, Emprestimos.id_usuario == Usuarios.id))
+        resultado_joinLivros_usuarios = db_session.execute(joinLivros_usuarios).fetchall()
+        lista = []
+        for nome_usuario in resultado_joinLivros_usuarios:
+            lista.append({'nome': nome_usuario,'emprestimos': nome_usuario.emprestimo})
+
+
         if not isbn_livro:
             return jsonify({'Livro não encontrado': isbn_livro})
-        elif not isbn_livro.status:
-            return jsonify({'livro não está disponivel para emprestimo': isbn_livro})
+
+        # if not isbn_livro.status:
+        #     return jsonify({'livro não está disponivel para emprestimo': isbn_livro})
         else:
             try:
                 emprestimo_cadastrado = Emprestimos(data_emprestimo=data_emprestimo,
