@@ -21,6 +21,21 @@ app.secret_key = 'chave_secreta'
 def index():
     return redirect('/consultar_livros')
 
+
+@app.route('/consultar_usuarios', methods=['GET'])
+def consultar_usuarios():
+    try:
+        usuarios = db_session.execute(select(Usuarios)).scalars().all()
+
+        lista_usuarios = []
+        for usuario in usuarios:
+            lista_usuarios.append(usuario.get_usuario())
+
+        return jsonify({'usuarios_cadastrados': lista_usuarios})
+    except Exception as e:
+        return jsonify({'error': 'Erro ao consultar usuários', 'detalhes': str(e)}), 500
+
+
 @app.route('/consultar_livros')
 def consultar_livros():
     try:
@@ -126,48 +141,153 @@ def cadastrar_usuario():
 
 @app.route('/cadastrar_emprestimo', methods=['POST'])
 def cadastrar_emprestimo():
-    if request.method == 'POST':
-
+    try:
         data_emprestimo = date.today()
         data_de_devolucao = data_emprestimo + relativedelta(weeks=5)
 
+        isbn = request.form.get('isbn')
+        id_usuario = request.form.get('id_usuario')
 
-        isbn = int(request.form.get('isbn'))
-        id_usuario = int(request.form.get('id_usuario'))
+        if not isbn or not id_usuario:
+            return jsonify({'error': 'Campos ISBN e id_usuario são obrigatórios'}), 400
+
+        isbn = int(isbn)
+        id_usuario = int(id_usuario)
+
+        livro = db_session.execute(select(Livros).filter_by(ISBN=isbn)).scalar()
+        if not livro:
+            return jsonify({'error': 'Livro não encontrado'}), 404
+
+        if not livro.status:
+            return jsonify({'error': 'Livro não está disponível para empréstimo'}), 400
+
+        usuario = db_session.get(Usuarios, id_usuario)
+        if not usuario:
+            return jsonify({'error': 'Usuário não encontrado'}), 404
 
 
-        isbn_livro = select(Livros)
-        db_livros = db_session.execute(isbn_livro).scalars()
-        isbn_livro = db_session.execute(isbn_livro.filter_by(ISBN=isbn)).scalar()
-
-        joinLivros_usuarios = (select(Emprestimos, Usuarios)
-                               .join(Usuarios, Emprestimos.id_usuario == Usuarios.id))
-        resultado_joinLivros_usuarios = db_session.execute(joinLivros_usuarios).fetchall()
-        lista = []
-        for nome_usuario in resultado_joinLivros_usuarios:
-            lista.append({'nome': nome_usuario,'emprestimos': nome_usuario.emprestimo})
+        emprestimo = Emprestimos(
+            data_emprestimo=data_emprestimo,
+            data_de_devolucao=data_de_devolucao,
+            ISBN_livro=isbn,
+            id_usuario=id_usuario
+        )
+        emprestimo.save()
 
 
-        if not isbn_livro:
-            return jsonify({'Livro não encontrado': isbn_livro})
+        livro.status = False
+        livro.save()
 
-        # if not isbn_livro.status:
-        #     return jsonify({'livro não está disponivel para emprestimo': isbn_livro})
-        else:
-            try:
-                emprestimo_cadastrado = Emprestimos(data_emprestimo=data_emprestimo,
-                                                    data_de_devolucao=data_de_devolucao,
-                                                    ISBN_livro=isbn_livro,
-                                                    id_usuario=id_usuario)
-                emprestimo_cadastrado.save()
+        return jsonify({
+            'data_emprestimo': emprestimo.data_emprestimo,
+            'data_de_devolucao': emprestimo.data_de_devolucao,
+            'ISBN_livro': emprestimo.ISBN_livro,
+            'id_usuario': emprestimo.id_usuario
+        })
+    except IntegrityError as e:
+        db_session.rollback()
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': 'Erro ao cadastrar empréstimo', 'detalhes': str(e)}), 500
+
+
+@app.route('/atualizar_usuario/<id>', methods=['PUT'])
+def editar_usuario(id):
+
+    try:
+        # usuario_editado = db_session.execute(select(Usuarios).where(Usuarios.id_usuario == id)).scalar()
+        usuario = select(Usuarios)
+        # fazer a busca do banco, filtrando o id:
+        usuario_editado = db_session.execute(usuario.filter_by(id=id)).scalar()
+
+        if not usuario_editado:
+            return jsonify({
+                "teste": "Não foi possível encontrar o usuário!"
+            })
+
+        if request.method == 'PUT':
+            # atualizar e verificar se tem algo nos campos
+            if (not request.form.get('nome') and not request.form.get('CPF')
+                    and not request.form.get('endereco')):
                 return jsonify({
-                    'data em que realizou o emprestimo': emprestimo_cadastrado.data_emprestimo,
-                    'data de devolucao do livro': emprestimo_cadastrado.data_de_devolucao,
-                    'ISBN do livro': emprestimo_cadastrado.ISBN_livro,
-                    'usuario que realizou o emprestimo': emprestimo_cadastrado.id_usuario
+                    # se tiver nulo retorna :
+                    "erro": "Os campos não devem ficar em branco!"
                 })
-            except IntegrityError as e:
-                return jsonify({'error': str(e)})
+
+            else:
+                # edita o usuario
+                CPF = request.form.get('CPF').strip()
+                if usuario_editado.CPF != CPF:
+                    # vai verificar se nenhum usuario tem esse cpf
+                    # scalar retorna o usuario em forma de objeto
+                    CPF_existe = db_session.execute(select(Usuarios).where(Usuarios.CPF == CPF)).scalar()
+
+                    if CPF_existe:
+                        return jsonify({
+                            "erro": "Este CPF já existe!"
+                        })
+                # o strip remover espaços em branco no início e no fim de uma string
+                usuario_editado.nome = request.form['nome']
+                usuario_editado.CPF = request.form['CPF'].strip()
+                usuario_editado.endereco = request.form['endereco']
+
+                usuario_editado.save()
+
+                return jsonify({
+                    "nome": usuario_editado.nome,
+                    "CPF": usuario_editado.CPF,
+                    "endereco": usuario_editado.endereco,
+                })
+
+    except sqlalchemy.exc.IntegrityError:
+        return jsonify({
+            "erro": "Esse CPF já foi cadastrado!"
+        })
+
+@app.route('/atualizar_livro/<int:id>', methods=['PUT'])
+def atualizar_livro(id):
+    livro = db_session.get(Livros, id)
+    if not livro:
+        return jsonify({'error': 'Livro não encontrado'}), 404
+
+    titulo = request.form.get('titulo')
+    autor = request.form.get('autor')
+    resumo = request.form.get('resumo')
+    status = request.form.get('status')
+
+    if titulo:
+        livro.titulo = titulo
+    if autor:
+        livro.autor = autor
+    if resumo:
+        livro.resumo = resumo
+    if status is not None:
+        livro.status = status.lower() == 'true'
+
+    livro.save()
+    return jsonify({'mensagem': 'Livro atualizado com sucesso', 'dados': livro.get_livro()})
+
+@app.route('/excluir_livro/<int:id>', methods=['DELETE'])
+def excluir_livro(id):
+    livro = db_session.get(Livros, id)
+    if not livro:
+        return jsonify({'error': 'Livro não encontrado'}), 404
+
+    emprestado = db_session.query(Emprestimos).filter_by(ISBN_livro=livro.ISBN).first()
+    if emprestado:
+        return jsonify({'error': 'Livro não pode ser excluído, pois está emprestado'}), 400
+
+    livro.delete()
+    return jsonify({'mensagem': 'Livro excluído com sucesso'})
+
+@app.route('/emprestimos_por_usuario/<int:id_usuario>', methods=['GET'])
+def emprestimos_por_usuario(id_usuario):
+    emprestimos = db_session.query(Emprestimos).filter_by(id_usuario=id_usuario).all()
+    if not emprestimos:
+        return jsonify({'mensagem': 'Nenhum empréstimo encontrado para este usuário'})
+
+    lista_emprestimos = [e.get_emprestimo() for e in emprestimos]
+    return jsonify({'emprestimos': lista_emprestimos})
 
 
 '''
