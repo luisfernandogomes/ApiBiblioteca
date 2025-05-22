@@ -308,15 +308,22 @@ def editar_emprestimo(ISBN):
         return jsonify({'error': str(e)}), 500
 
 
-'''
-Atendimento à biblioteca: A API deve fornecer funcionalidades para:
-a. Cadastro de novos livros; ✅
-b. Cadastro de novos usuários;✅
-c. Realização de empréstimos;✅
-d. Consulta de livros disponíveis e emprestados;✅
-e. Consulta de histórico de empréstimos por usuário;❌
-f. Atualização de informações de livros e usuários;❌
+# Banco
+# Emprestimos, id usuario
+# Usuario: cpf, endereço
+# livro: /
+# //////////////////////////
+# proteção: editar emprestimos,
+# emprestimos por usuario
+# atulizar livro,
+# atualizar usuario,
+# cadastro de emprestimos,
+# cadastro usuario,
+# cadastro de livro
+# consultar usuarios
+# ////////////////
+# sem proteção
+# consultar livros
 
-'''
 if __name__ == '__main__':
     app.run(debug=True)
